@@ -40,8 +40,12 @@ app.get("/authorize", async (c) => {
   return renderApprovalDialog(c.req.raw, {
     client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
     server: {
-      name: "STAPE.AI",
-      description: "",
+      // Must name the operator of *this* deployment. Upstream hardcodes
+      // "STAPE.AI", which on our fork told users they were authorizing a
+      // company that has nothing to do with this server.
+      name: "Expliciet Marketing MCP Hub",
+      description:
+        "Self-hosted by Expliciet. Grants this MCP client access to the Google Tag Manager accounts your Google account can already reach.",
     },
     state: { oauthReqInfo },
   });

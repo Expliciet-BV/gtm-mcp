@@ -15,10 +15,10 @@ export class GoogleTagManagerMCPServer extends McpAgent<
   McpAgentPropsModel
 > {
   server = new McpServer({
-    name: "google-tag-manager-mcp-server",
+    name: "gtm-mcp",
     version: getPackageVersion(),
     protocolVersion: "1.0",
-    vendor: "stape-io",
+    vendor: "Expliciet-BV",
     homepage: "https://github.com/stape-io/google-tag-manager-mcp-server",
   });
 
