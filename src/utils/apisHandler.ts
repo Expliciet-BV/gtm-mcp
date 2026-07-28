@@ -200,8 +200,8 @@ app.get("/remove", async (c) => {
   });
 });
 
-app.get("/", async () => {
-  return new Response(renderMainPage(), {
+app.get("/", async (c) => {
+  return new Response(renderMainPage(new URL(c.req.url).origin), {
     headers: {
       "content-type": "text/html;charset=UTF-8",
     },

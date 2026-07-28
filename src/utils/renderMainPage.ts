@@ -1,4 +1,13 @@
-export const renderMainPage = () => {
+/**
+ * Renders the landing page.
+ *
+ * Takes the server's own origin rather than hardcoding it. Upstream printed
+ * Stape's hosted endpoint in the copy-paste config block, which on a
+ * self-hosted fork silently tells users to connect to Stape's server instead
+ * of to this deployment.
+ */
+export const renderMainPage = (origin: string) => {
+  const sseUrl = new URL("/sse", origin).href;
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -6,7 +15,7 @@ export const renderMainPage = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex,nofollow" />
-    <title>Stape MCP Server for Google Tag Manager</title>
+    <title>Expliciet MCP Server for Google Tag Manager</title>
     <style>
           html {
               display: flex;
@@ -74,7 +83,7 @@ export const renderMainPage = () => {
     </head>
     <body>
       <main>
-        <h1>Stape MCP Server for Google Tag Manager</h1>
+        <h1>Expliciet MCP Server for Google Tag Manager</h1>
         
         <p>
         This is a server that supports remote MCP connections, with Google OAuth built-in and provides an interface to the
@@ -102,12 +111,12 @@ export const renderMainPage = () => {
         <code>
           {
             "mcpServers": {
-              "google-tag-manager-mcp-server": {
+              "gtm-mcp": {
                 "command": "npx",
                 "args": [
                   "-y",
                   "mcp-remote",
-                  "https://gtm-mcp.stape.ai/sse"
+                  "${sseUrl}"
                 ]
               }
             }
