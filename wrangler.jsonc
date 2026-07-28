@@ -1,21 +1,36 @@
 /**
+ * Expliciet's fork of stape-io/google-tag-manager-mcp-server.
+ *
+ * Diverges from upstream in three places, all of them infrastructure rather
+ * than behaviour, so upstream merges stay cheap:
+ *   1. "name" is ours, so the Worker deploys to our own workers.dev subdomain.
+ *   2. Upstream's "routes" block bound the Worker to gtm-mcp.stape.ai. Removed:
+ *      a Workers custom domain requires the zone to live in our Cloudflare
+ *      account, and expliciet.be is on Combell's nameservers. See
+ *      docs/ARCHITECTURE.md in Expliciet-BV/mcp-google-om.
+ *   3. "kv_namespaces.id" is our own namespace, not Stape's.
+ *
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "google-tag-manager-mcp-server",
+  "name": "gtm-mcp",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "routes": [
-    {
-      "pattern": "gtm-mcp.stape.ai",
-      "custom_domain": true
-    }
-  ],
+  "workers_dev": true,
+  // Non-secret configuration. GOOGLE_CLIENT_SECRET and COOKIE_ENCRYPTION_KEY
+  // are Worker secrets instead, set with `wrangler secret put` and held in
+  // 1Password. HOSTED_DOMAIN stays empty on purpose: upstream only sets
+  // Google's "hd" hint when it is non-empty, and Expliciet has no Google
+  // Workspace organization, so every marketer signs in with a personal account.
+  "vars": {
+    "WORKER_HOST": "https://gtm-mcp.christophe-vanleeuw.workers.dev",
+    "HOSTED_DOMAIN": ""
+  },
   "migrations": [
     {
       "new_sqlite_classes": [
@@ -35,7 +50,7 @@
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",
-      "id": "a2bbe0a0645e44bf83b5dc450d8a9496"
+      "id": "0a45ab6560e44631ba669e995ff27c18"
     }
   ],
   "observability": {
