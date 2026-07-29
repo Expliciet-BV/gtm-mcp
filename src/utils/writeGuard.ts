@@ -13,8 +13,16 @@ type TagManagerClient = ReturnType<typeof google.tagmanager>;
 const REFUSE_MARKER =
   /\(\s*(do not use|archive)\s*\)|^\s*(do not use|archive)\b/i;
 
-/** Write here without asking. A container or account named as a sandbox. */
-const SANDBOX_MARKER = /mcp\s*test/i;
+/**
+ * Write here without asking. A container or account named as a sandbox.
+ *
+ * The separator class matters. Expliciet's existing test container is called
+ * "mcp-test-container", with hyphens, and a plain \s* would not match it. It
+ * only behaved as a sandbox because the account name happened to be
+ * "MCP TEST - geen klantdata" with spaces, so any renaming of that account
+ * would have silently turned the sandbox into a confirmation prompt.
+ */
+const SANDBOX_MARKER = /mcp[\s_-]*test/i;
 
 export type WriteVerdict = "refused" | "sandbox" | "needsConfirmation";
 

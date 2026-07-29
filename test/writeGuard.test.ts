@@ -82,6 +82,42 @@ describe("classifyTarget", () => {
     );
   });
 
+  it("accepts hyphens and underscores in the sandbox marker", () => {
+    // Expliciet's real container is named "mcp-test-container". A marker
+    // regex that only tolerated whitespace missed it, and it passed only
+    // because the account name carried the marker with spaces.
+    expect(
+      classifyTarget({
+        accountName: "Sandbox Expliciet - geen klantdata",
+        containerName: "mcp-test-container",
+      }),
+    ).toBe("sandbox");
+    expect(
+      classifyTarget({
+        accountName: "Sandbox Expliciet - geen klantdata",
+        containerName: "mcp_test scratch",
+      }),
+    ).toBe("sandbox");
+  });
+
+  it("does not treat Expliciet's other test containers as sandboxes on their own", () => {
+    // "Claude GTM Automation Test" carries no MCP TEST marker. Inside the
+    // MCP TEST account it is a sandbox because of the account name; moved
+    // anywhere else it would correctly require confirmation.
+    expect(
+      classifyTarget({
+        accountName: "Sandbox Expliciet - geen klantdata",
+        containerName: "Claude GTM Automation Test",
+      }),
+    ).toBe("needsConfirmation");
+    expect(
+      classifyTarget({
+        accountName: "MCP TEST - geen klantdata",
+        containerName: "Claude GTM Automation Test",
+      }),
+    ).toBe("sandbox");
+  });
+
   it("lets a refusal win over a sandbox marker", () => {
     // If both markers are present the safe reading is the restrictive one.
     expect(
