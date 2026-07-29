@@ -20,6 +20,8 @@
     "postinstall": "npm run build",
     "lint": "eslint --ext .ts src",
     "lint:fix": "eslint --ext .ts src --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublish": "npm run build",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev --local-upstream localhost:8788",
@@ -49,6 +51,7 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.1",
+    "vitest": "^3.2.7",
     "wrangler": "^4.16.0"
   }
 }
