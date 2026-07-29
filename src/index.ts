@@ -5,6 +5,7 @@ import { McpAgentPropsModel } from "./models/McpAgentModel";
 import { tools } from "./tools";
 import {
   apisHandler,
+  AuthSession,
   getPackageVersion,
   handleTokenExchangeCallback,
 } from "./utils";
@@ -25,9 +26,15 @@ export class GoogleTagManagerMCPServer extends McpAgent<
   async init() {
     console.log("[MCP] init() called");
 
+    // One session per Durable Object instance. Tools are registered once, so
+    // they must not capture this.props directly: the framework replaces that
+    // object whenever tokenExchangeCallback refreshes, and a captured
+    // reference would keep serving the old token.
+    const session = new AuthSession(() => this.props, this.env);
+
     tools.forEach((register) => {
       // @ts-ignore
-      register(this.server, { props: this.props, env: this.env });
+      register(this.server, { props: session, env: this.env });
     });
   }
 }

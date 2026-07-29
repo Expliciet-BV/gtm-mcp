@@ -1,3 +1,4 @@
+export * from "./AuthSession";
 export * from "./log";
 export * from "./getPackageVersion";
 export * from "./createErrorResponse";

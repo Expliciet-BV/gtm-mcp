@@ -1,22 +1,23 @@
 import { google } from "googleapis";
+import type { AuthSession } from "./AuthSession";
+import type { McpAgentPropsModel } from "../models/McpAgentModel";
 import { log } from "./log";
-import { Props } from "./authorizeUtils";
 
 type TagManagerClient = ReturnType<typeof google.tagmanager>;
 
+/**
+ * Upstream threw here once props.expiresAt had passed, which failed a
+ * marketer's tool call in the middle of whatever they were doing. An
+ * AuthSession renews the token instead. The plain-props branch stays for
+ * type compatibility and simply uses the token as given.
+ */
 export async function getTagManagerClient(
-  props: Props,
+  session: AuthSession | McpAgentPropsModel,
 ): Promise<TagManagerClient> {
-  const token = props.accessToken;
-
-  if (props.expiresAt) {
-    const now = Math.floor(Date.now() / 1000);
-    if (now >= props.expiresAt) {
-      throw new Error(
-        "Access token expired. Please refresh your connection or re-authenticate.",
-      );
-    }
-  }
+  const token =
+    "validAccessToken" in session
+      ? await session.validAccessToken()
+      : session.accessToken;
 
   try {
     return google.tagmanager({
