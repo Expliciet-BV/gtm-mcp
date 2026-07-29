@@ -21,14 +21,23 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  // workers.dev stays on alongside the custom domain. It is what existing
+  // marketer sessions are bound to, so turning it off would break them
+  // mid-migration. Retire it once everyone is on gtm-mcp.expl.be.
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "gtm-mcp.expl.be",
+      "custom_domain": true
+    }
+  ],
   // Non-secret configuration. GOOGLE_CLIENT_SECRET and COOKIE_ENCRYPTION_KEY
   // are Worker secrets instead, set with `wrangler secret put` and held in
   // 1Password. HOSTED_DOMAIN stays empty on purpose: upstream only sets
   // Google's "hd" hint when it is non-empty, and Expliciet has no Google
   // Workspace organization, so every marketer signs in with a personal account.
   "vars": {
-    "WORKER_HOST": "https://gtm-mcp.christophe-vanleeuw.workers.dev",
+    "WORKER_HOST": "https://gtm-mcp.expl.be",
     "HOSTED_DOMAIN": ""
   },
   "migrations": [
