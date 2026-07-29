@@ -71,16 +71,23 @@ async function redirectToGoogle(
 ) {
   console.log(`/redirectToGoogle oauthReqInfo`, oauthReqInfo);
 
+  // Four Tag Manager scopes, not the seven upstream requests. Dropped:
+  //   manage.accounts    only renames accounts and changes account settings,
+  //                      which no marketer workflow needs.
+  //   delete.containers  deletes whole containers.
+  //   manage.users       grants and revokes other people's access to client
+  //                      containers, the most damaging call in the API.
+  // The tools that needed those scopes are gone too, because a tool that can
+  // only fail on a permission error is worse than no tool: the agent retries,
+  // and the error blames Google rather than naming our decision.
+  // See docs/GUARDRAILS.md in Expliciet-BV/mcp-google-om.
   const scopes = [
     "email",
     "profile",
-    "https://www.googleapis.com/auth/tagmanager.manage.accounts",
-    "https://www.googleapis.com/auth/tagmanager.edit.containers",
-    "https://www.googleapis.com/auth/tagmanager.delete.containers",
-    "https://www.googleapis.com/auth/tagmanager.edit.containerversions",
-    "https://www.googleapis.com/auth/tagmanager.manage.users",
-    "https://www.googleapis.com/auth/tagmanager.publish",
     "https://www.googleapis.com/auth/tagmanager.readonly",
+    "https://www.googleapis.com/auth/tagmanager.edit.containers",
+    "https://www.googleapis.com/auth/tagmanager.edit.containerversions",
+    "https://www.googleapis.com/auth/tagmanager.publish",
   ];
   return new Response(null, {
     status: 302,

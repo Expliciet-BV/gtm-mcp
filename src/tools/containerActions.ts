@@ -36,22 +36,24 @@ export const containerActions = (
 ): void => {
   server.tool(
     "gtm_container",
-    `Performs all container-related operations: create, get, update, remove, list, combine, lookup, moveTagId, snippet. The 'list' action returns up to itemsPerPage items per page.`,
+    `Performs all container-related operations: create, get, update, list, combine, lookup, moveTagId, snippet. The 'list' action returns up to itemsPerPage items per page.`,
     {
+      // No 'remove' action: deleting a container went with the
+      // tagmanager.delete.containers scope. See docs/GUARDRAILS.md in
+      // Expliciet-BV/mcp-google-om.
       action: z
         .enum([
           "create",
           "get",
           "list",
           "update",
-          "remove",
           "combine",
           "lookup",
           "moveTagId",
           "snippet",
         ])
         .describe(
-          "The container operation to perform. Must be one of: 'create', 'get', 'list', 'update', 'remove', 'combine', 'lookup', 'moveTagId', 'snippet'.",
+          "The container operation to perform. Must be one of: 'create', 'get', 'list', 'update', 'combine', 'lookup', 'moveTagId', 'snippet'.",
         ),
       accountId: z
         .string()
@@ -60,7 +62,7 @@ export const containerActions = (
         .string()
         .optional()
         .describe(
-          "The unique ID of the GTM Container. Required for 'get', 'update', 'remove', 'combine', 'lookup', 'moveTagId', and 'snippet' actions.",
+          "The unique ID of the GTM Container. Required for 'get', 'update', 'combine', 'lookup', 'moveTagId', and 'snippet' actions.",
         ),
       destinationId: z
         .string()
@@ -175,34 +177,6 @@ export const containerActions = (
             return {
               content: [
                 { type: "text", text: JSON.stringify(response.data, null, 2) },
-              ],
-            };
-          }
-          case "remove": {
-            if (!accountId) {
-              throw new Error(`accountId is required for ${action} action`);
-            }
-
-            if (!containerId) {
-              throw new Error(`containerId is required for ${action} action`);
-            }
-
-            await tagmanager.accounts.containers.delete({
-              path: `accounts/${accountId}/containers/${containerId}`,
-            });
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(
-                    {
-                      success: true,
-                      message: `Container ${containerId} was successfully deleted`,
-                    },
-                    null,
-                    2,
-                  ),
-                },
               ],
             };
           }

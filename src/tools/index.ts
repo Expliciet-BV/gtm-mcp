@@ -11,7 +11,6 @@ import { tagActions } from "./tagActions";
 import { templateActions } from "./templateActions";
 import { transformationActions } from "./transformationActions";
 import { triggerActions } from "./triggerActions";
-import { userPermissionActions } from "./userPermissionActions";
 import { variableActions } from "./variableActions";
 import { versionHeaderActions } from "./versionHeaderActions";
 import { versionActions } from "./versionActions";
@@ -31,7 +30,6 @@ export const tools = [
   templateActions,
   transformationActions,
   triggerActions,
-  userPermissionActions,
   variableActions,
   versionHeaderActions,
   versionActions,

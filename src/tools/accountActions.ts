@@ -1,32 +1,27 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { McpAgentToolParamsModel } from "../models/McpAgentModel";
-import { AccountSchema } from "../schemas/AccountSchema";
 import { createErrorResponse, getTagManagerClient, log } from "../utils";
-
-const PayloadSchema = AccountSchema.omit({
-  accountId: true,
-});
 
 export const accountActions = (
   server: McpServer,
   { props }: McpAgentToolParamsModel,
 ): void => {
+  // No guardWrite call and no confirm parameter: gtm_account is read-only
+  // since the update action went with the manage.accounts scope. Add both if
+  // a write action is ever added here, and add the action to WRITE_ACTIONS.
   server.tool(
     "gtm_account",
-    "Performs all account-related operations: get, list, update. Use the 'action' parameter to select the operation.",
+    "Performs all account-related operations: get, list. Use the 'action' parameter to select the operation.",
     {
       action: z
-        .enum(["get", "list", "update"])
+        .enum(["get", "list"])
         .describe(
-          "The account operation to perform. Must be one of: 'get', 'list', 'update'.",
+          "The account operation to perform. Must be one of: 'get', 'list'.",
         ),
       accountId: z.string().describe("The unique ID of the GTM Account."),
-      config: PayloadSchema.optional().describe(
-        "Configuration for 'update' action. All fields correspond to the GTM Account resource.",
-      ),
     },
-    async ({ action, accountId, config }) => {
+    async ({ action, accountId }) => {
       log(`Running tool: gtm_account with action ${action}`);
 
       try {
@@ -49,25 +44,6 @@ export const accountActions = (
           }
           case "list": {
             const response = await tagmanager.accounts.list({});
-            return {
-              content: [
-                { type: "text", text: JSON.stringify(response.data, null, 2) },
-              ],
-            };
-          }
-          case "update": {
-            if (!accountId) {
-              throw new Error(`accountId is required for ${action} action`);
-            }
-
-            if (!config) {
-              throw new Error(`config is required for ${action} action`);
-            }
-
-            const response = await tagmanager.accounts.update({
-              path: `accounts/${accountId}`,
-              requestBody: config,
-            });
             return {
               content: [
                 { type: "text", text: JSON.stringify(response.data, null, 2) },
