@@ -2,10 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { tagmanager_v2 } from "googleapis";
 import { z } from "zod";
 import { McpAgentToolParamsModel } from "../models/McpAgentModel";
+import type { AuthSession } from "../utils/AuthSession";
 import { TriggerSchema } from "../schemas/TriggerSchema";
 import {
   createErrorResponse,
   getTagManagerClient,
+  guardWrite,
   log,
   paginateArray,
 } from "../utils";
@@ -73,6 +75,12 @@ export const triggerActions = (
         .describe(
           `Number of items to return per page (1-${ITEMS_PER_PAGE}). Default: ${ITEMS_PER_PAGE}. Use lower values if experiencing response issues.`,
         ),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set to true to execute a write against a live container. Leave it out first: the tool then reports which GTM account and container would be modified, so it can be checked before anything changes. Targets in an 'MCP TEST' account or container execute without it. Targets named '(archive)' or '(do not use)' are always refused.",
+        ),
     },
     async ({
       action,
@@ -84,11 +92,28 @@ export const triggerActions = (
       fingerprint,
       page,
       itemsPerPage,
+      confirm,
     }) => {
       log(`Running tool: gtm_trigger with action ${action}`);
 
       try {
         const tagmanager = await getTagManagerClient(props);
+
+        // props is typed as a union for upstream-merge compatibility, but
+        // init() only ever passes an AuthSession.
+        const guard = await guardWrite({
+          session: props as AuthSession,
+          client: tagmanager,
+          tool: "gtm_trigger",
+          action,
+          accountId,
+          containerId,
+          description: `${action} trigger`,
+          confirm,
+        });
+        if (!guard.allowed) {
+          return guard.response;
+        }
 
         switch (action) {
           case "create": {
