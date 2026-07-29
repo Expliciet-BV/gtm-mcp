@@ -3,6 +3,7 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { tagmanager_v2 } from "googleapis";
 import { z } from "zod";
 import { McpAgentToolParamsModel } from "../models/McpAgentModel";
+import type { AuthSession } from "../utils/AuthSession";
 import { BuiltInVariableSchema } from "../schemas/BuiltInVariableSchema";
 import { CustomTemplateSchema } from "../schemas/CustomTemplateSchema";
 import { FolderSchema } from "../schemas/FolderSchema";
@@ -16,6 +17,7 @@ import { ZoneSchema } from "../schemas/ZoneSchema";
 import {
   createErrorResponse,
   getTagManagerClient,
+  guardWrite,
   log,
   paginateArray,
 } from "../utils";
@@ -115,6 +117,12 @@ export const workspaceActions = (
         .describe(
           `Number of items to return per page (1-${ITEMS_PER_PAGE}). Default: ${ITEMS_PER_PAGE}. Use lower values if experiencing response issues.`,
         ),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set to true to execute a write against a live container. Leave it out first: the tool then reports which GTM account and container would be modified, so it can be checked before anything changes. Targets in an 'MCP TEST' account or container execute without it. Targets named '(archive)' or '(do not use)' are always refused.",
+        ),
     },
     async ({
       action,
@@ -127,6 +135,7 @@ export const workspaceActions = (
       changeStatus,
       page,
       itemsPerPage,
+      confirm,
     }): Promise<CallToolResult> => {
       log(
         `Running tool: gtm_workspace for action '${action}' on account ${accountId}, container ${containerId}${
@@ -136,6 +145,22 @@ export const workspaceActions = (
 
       try {
         const tagmanager = await getTagManagerClient(props);
+
+        // props is typed as a union for upstream-merge compatibility, but
+        // init() only ever passes an AuthSession.
+        const guard = await guardWrite({
+          session: props as AuthSession,
+          client: tagmanager,
+          tool: "gtm_workspace",
+          action,
+          accountId,
+          containerId,
+          description: `${action} workspace`,
+          confirm,
+        });
+        if (!guard.allowed) {
+          return guard.response;
+        }
 
         switch (action) {
           case "create": {
