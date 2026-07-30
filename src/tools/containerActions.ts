@@ -38,24 +38,25 @@ export const containerActions = (
 ): void => {
   server.tool(
     "gtm_container",
-    `Performs all container-related operations: create, get, update, list, combine, lookup, moveTagId, snippet. The 'list' action returns up to itemsPerPage items per page.`,
+    `Performs all container-related operations: create, get, update, remove, list, combine, lookup, moveTagId, snippet. The 'list' action returns up to itemsPerPage items per page.`,
     {
-      // No 'remove' action: deleting a container went with the
-      // tagmanager.delete.containers scope. See docs/GUARDRAILS.md in
-      // Expliciet-BV/mcp-google-om.
+      // 'remove' deletes an entire container and is classified as destructive:
+      // it needs confirm: true plus a confirmTarget challenge. See
+      // docs/GUARDRAILS.md in Expliciet-BV/mcp-google-om.
       action: z
         .enum([
           "create",
           "get",
           "list",
           "update",
+          "remove",
           "combine",
           "lookup",
           "moveTagId",
           "snippet",
         ])
         .describe(
-          "The container operation to perform. Must be one of: 'create', 'get', 'list', 'update', 'combine', 'lookup', 'moveTagId', 'snippet'.",
+          "The container operation to perform. Must be one of: 'create', 'get', 'list', 'update', 'remove', 'combine', 'lookup', 'moveTagId', 'snippet'. 'remove' deletes the whole container and requires a double confirmation.",
         ),
       accountId: z
         .string()
@@ -64,7 +65,7 @@ export const containerActions = (
         .string()
         .optional()
         .describe(
-          "The unique ID of the GTM Container. Required for 'get', 'update', 'combine', 'lookup', 'moveTagId', and 'snippet' actions.",
+          "The unique ID of the GTM Container. Required for 'get', 'update', 'remove', 'combine', 'lookup', 'moveTagId', and 'snippet' actions.",
         ),
       destinationId: z
         .string()
@@ -106,7 +107,13 @@ export const containerActions = (
         .boolean()
         .optional()
         .describe(
-          "Set to true to execute a write against a live container. Leave it out first: the tool then reports which GTM account and container would be modified, so it can be checked before anything changes. Targets in an 'MCP TEST' account or container execute without it. Targets named '(archive)' or '(do not use)' are always refused.",
+          "Set to true to execute a write against a live container. Leave it out first: the tool then reports which GTM account and container would be modified, so it can be checked before anything changes. Targets in an 'MCP TEST' account or container execute without it, except for the destructive 'remove' action. Targets named '(archive)' or '(do not use)' are always refused.",
+        ),
+      confirmTarget: z
+        .string()
+        .optional()
+        .describe(
+          "Second confirmation, required for the destructive 'remove' action. The tool's first response prints the exact phrase to send back here, for example 'DELETE GTM-N727FV95'. It cannot be produced without having seen the resolved container, so a guessed or swapped container ID fails here.",
         ),
     },
     async ({
@@ -121,6 +128,7 @@ export const containerActions = (
       page,
       itemsPerPage,
       confirm,
+      confirmTarget,
     }) => {
       log(`Running tool: gtm_container with action ${action}`);
 
@@ -138,6 +146,7 @@ export const containerActions = (
           containerId,
           description: `${action} container`,
           confirm,
+          confirmTarget,
         });
         if (!guard.allowed) {
           return guard.response;
@@ -202,6 +211,34 @@ export const containerActions = (
             return {
               content: [
                 { type: "text", text: JSON.stringify(response.data, null, 2) },
+              ],
+            };
+          }
+          case "remove": {
+            if (!accountId) {
+              throw new Error(`accountId is required for ${action} action`);
+            }
+
+            if (!containerId) {
+              throw new Error(`containerId is required for ${action} action`);
+            }
+
+            await tagmanager.accounts.containers.delete({
+              path: `accounts/${accountId}/containers/${containerId}`,
+            });
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: true,
+                      message: `Container ${containerId} was successfully deleted`,
+                    },
+                    null,
+                    2,
+                  ),
+                },
               ],
             };
           }

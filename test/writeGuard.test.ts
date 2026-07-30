@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyTarget,
+  destructiveChallenge,
   guardWrite,
   isWriteAction,
 } from "../src/utils/writeGuard";
@@ -159,10 +160,61 @@ describe("isWriteAction", () => {
     expect(isWriteAction("gtm_workspace", "getStatus")).toBe(false);
   });
 
+  it("recognises the restored destructive writes", () => {
+    expect(isWriteAction("gtm_container", "remove")).toBe(true);
+    expect(isWriteAction("gtm_user_permission", "create")).toBe(true);
+    expect(isWriteAction("gtm_user_permission", "remove")).toBe(true);
+    expect(isWriteAction("gtm_account", "update")).toBe(true);
+    expect(isWriteAction("gtm_account", "get")).toBe(false);
+    expect(isWriteAction("gtm_user_permission", "list")).toBe(false);
+  });
+
   it("treats an unknown tool as read-only rather than guessing", () => {
     // Guessing "write" would break reads; guessing "read" only means a new
     // tool ships unguarded, which the checklist in docs/GUARDRAILS.md catches.
     expect(isWriteAction("gtm_something_new", "create")).toBe(false);
+  });
+});
+
+describe("destructiveChallenge", () => {
+  const container = {
+    accountName: "Kinedo",
+    containerName: "www.kinedo.info",
+    publicId: "GTM-TMT5GG4",
+  };
+
+  it("uses the public container id when a container is in play", () => {
+    expect(destructiveChallenge("gtm_container", "remove", container)).toBe(
+      "DELETE GTM-TMT5GG4",
+    );
+  });
+
+  it("uses the account name for account-level actions", () => {
+    expect(
+      destructiveChallenge("gtm_user_permission", "create", {
+        accountName: "Klanten",
+      }),
+    ).toBe("GRANT Klanten");
+    expect(
+      destructiveChallenge("gtm_user_permission", "remove", {
+        accountName: "Klanten",
+      }),
+    ).toBe("REVOKE Klanten");
+    expect(
+      destructiveChallenge("gtm_account", "update", { accountName: "Kinedo" }),
+    ).toBe("RENAME Kinedo");
+  });
+
+  it("returns nothing for an ordinary write", () => {
+    expect(
+      destructiveChallenge("gtm_tag", "create", container),
+    ).toBeUndefined();
+    expect(
+      destructiveChallenge("gtm_container", "update", container),
+    ).toBeUndefined();
+    expect(
+      destructiveChallenge("gtm_version", "publish", container),
+    ).toBeUndefined();
   });
 });
 
@@ -378,6 +430,173 @@ describe("guardWrite", () => {
     expect(result.allowed).toBe(false);
     if (result.allowed) return;
     expect(textOf(result)).toMatch(/could not verify/i);
+  });
+
+  it("demands both confirmations before deleting a container", async () => {
+    const args = {
+      session: session(),
+      client: client({
+        accountName: "Kinedo",
+        containerName: "www.kinedo.info",
+        publicId: "GTM-TMT5GG4",
+      }),
+      tool: "gtm_container",
+      action: "remove",
+      accountId: "1",
+      containerId: "2",
+      description: "remove container",
+    };
+
+    // First call: no confirm at all. Prints the challenge, changes nothing.
+    const first = await guardWrite(args);
+    expect(first.allowed).toBe(false);
+    if (first.allowed) return;
+    expect(textOf(first)).toMatch(/DESTRUCTIVE/);
+    expect(textOf(first)).toMatch(/confirmTarget: "DELETE GTM-TMT5GG4"/);
+
+    // confirm alone is not enough for a destructive action.
+    const second = await guardWrite({ ...args, confirm: true });
+    expect(second.allowed).toBe(false);
+    if (second.allowed) return;
+    expect(textOf(second)).toMatch(/did not match/i);
+    expect(textOf(second)).toMatch(/Received: {2}nothing/);
+
+    // A wrong container's challenge is rejected, which is the whole point.
+    const third = await guardWrite({
+      ...args,
+      confirm: true,
+      confirmTarget: "DELETE GTM-N727FV95",
+    });
+    expect(third.allowed).toBe(false);
+
+    // Right phrase, right id.
+    const fourth = await guardWrite({
+      ...args,
+      confirm: true,
+      confirmTarget: "DELETE GTM-TMT5GG4",
+    });
+    expect(fourth.allowed).toBe(true);
+  });
+
+  it("tolerates surrounding whitespace in confirmTarget", async () => {
+    const result = await guardWrite({
+      session: session(),
+      client: client({
+        accountName: "Kinedo",
+        containerName: "www.kinedo.info",
+        publicId: "GTM-TMT5GG4",
+      }),
+      tool: "gtm_container",
+      action: "remove",
+      accountId: "1",
+      containerId: "2",
+      description: "remove container",
+      confirm: true,
+      confirmTarget: "  DELETE GTM-TMT5GG4  ",
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  it("still asks for a confirmation on a destructive action inside a sandbox", async () => {
+    const args = {
+      session: session(),
+      client: client({
+        accountName: "MCP TEST - geen klantdata",
+        containerName: "scratch",
+        publicId: "GTM-N727FV95",
+      }),
+      tool: "gtm_container",
+      action: "remove",
+      accountId: "1",
+      containerId: "2",
+      description: "remove container",
+    };
+
+    const unconfirmed = await guardWrite(args);
+    expect(unconfirmed.allowed).toBe(false);
+
+    const confirmed = await guardWrite({
+      ...args,
+      confirm: true,
+      confirmTarget: "DELETE GTM-N727FV95",
+    });
+    expect(confirmed.allowed).toBe(true);
+  });
+
+  it("still executes an ordinary write inside a sandbox with no confirmation", async () => {
+    const result = await guardWrite({
+      session: session(),
+      client: client({
+        accountName: "MCP TEST - geen klantdata",
+        containerName: "scratch",
+        publicId: "GTM-N727FV95",
+      }),
+      tool: "gtm_container",
+      action: "update",
+      accountId: "1",
+      containerId: "2",
+      description: "update container",
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  it("refuses a destructive action on a marked container even when both confirmations are right", async () => {
+    const result = await guardWrite({
+      session: session(),
+      client: client({
+        accountName: "Klanten",
+        containerName: "(do not use) itc.be",
+        publicId: "GTM-WKRQ5D5",
+      }),
+      tool: "gtm_container",
+      action: "remove",
+      accountId: "1",
+      containerId: "2",
+      description: "remove container",
+      confirm: true,
+      confirmTarget: "DELETE GTM-WKRQ5D5",
+    });
+    expect(result.allowed).toBe(false);
+    if (result.allowed) return;
+    expect(textOf(result)).toMatch(/retired or not to be used/i);
+  });
+
+  it("challenges a user permission change on the account name", async () => {
+    const args = {
+      session: session(),
+      client: client({ accountName: "Klanten" }),
+      tool: "gtm_user_permission",
+      action: "create",
+      accountId: "1",
+      description: "create user permission for someone@example.com",
+    };
+
+    const first = await guardWrite(args);
+    expect(first.allowed).toBe(false);
+    if (first.allowed) return;
+    expect(textOf(first)).toMatch(/confirmTarget: "GRANT Klanten"/);
+    expect(textOf(first)).toMatch(/someone@example\.com/);
+
+    const done = await guardWrite({
+      ...args,
+      confirm: true,
+      confirmTarget: "GRANT Klanten",
+    });
+    expect(done.allowed).toBe(true);
+  });
+
+  it("challenges an account rename on the account name", async () => {
+    const result = await guardWrite({
+      session: session(),
+      client: client({ accountName: "Kinedo" }),
+      tool: "gtm_account",
+      action: "update",
+      accountId: "1",
+      description: "update account",
+      confirm: true,
+      confirmTarget: "RENAME Kinedo",
+    });
+    expect(result.allowed).toBe(true);
   });
 
   it("resolves each target once per session", async () => {

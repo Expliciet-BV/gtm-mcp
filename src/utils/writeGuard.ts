@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { google } from "googleapis";
-import { WRITE_ACTIONS } from "../constants/writeActions";
+import { DESTRUCTIVE_ACTIONS, WRITE_ACTIONS } from "../constants/writeActions";
 import type { AuthSession, ResolvedTarget } from "./AuthSession";
 import { log } from "./log";
 
@@ -56,6 +56,32 @@ export function classifyTarget(target: ResolvedTarget): WriteVerdict {
 /** Whether this tool and action change something, per the WRITE_ACTIONS table. */
 export function isWriteAction(tool: string, action: string): boolean {
   return WRITE_ACTIONS[tool]?.includes(action) ?? false;
+}
+
+/**
+ * The confirmation phrase a destructive action requires, or undefined when the
+ * action is not destructive.
+ *
+ * The phrase combines a verb with the target's own identifier, so it cannot be
+ * produced without having resolved the target first. A fixed phrase alone
+ * ("DELETE") proves nothing: an agent can send it without ever looking at what
+ * it is about to delete.
+ *
+ * Containers are identified by their public GTM-XXXXXXX id, which is what a
+ * marketer recognises. Account-level actions use the account name, because
+ * there is nothing shorter that identifies it to a human.
+ */
+export function destructiveChallenge(
+  tool: string,
+  action: string,
+  target: ResolvedTarget,
+): string | undefined {
+  const verb = DESTRUCTIVE_ACTIONS[tool]?.[action];
+  if (!verb) {
+    return undefined;
+  }
+  const identifier = target.publicId ?? target.accountName;
+  return `${verb} ${identifier}`;
 }
 
 export type GuardResult =
@@ -142,6 +168,7 @@ export async function guardWrite({
   containerId,
   description,
   confirm,
+  confirmTarget,
 }: {
   session: AuthSession;
   client: TagManagerClient;
@@ -151,6 +178,7 @@ export async function guardWrite({
   containerId?: string;
   description: string;
   confirm?: boolean;
+  confirmTarget?: string;
 }): Promise<GuardResult> {
   if (!isWriteAction(tool, action)) {
     return { allowed: true };
@@ -183,27 +211,53 @@ export async function guardWrite({
     );
   }
 
-  if (verdict === "sandbox") {
-    return { allowed: true };
-  }
+  const challenge = destructiveChallenge(tool, action, target);
 
-  if (confirm) {
+  // A sandbox skips confirmation for ordinary writes, but not for a
+  // destructive one. Deleting a container is just as permanent in a test
+  // account, and a habit of never being asked is a habit that travels.
+  if (verdict === "sandbox" && !challenge) {
     return { allowed: true };
   }
 
   // Deliberately not isError: this is a question, not a failure, and agents
   // retry errors instead of answering questions.
-  return {
-    allowed: false,
-    response: {
-      content: [
-        {
-          type: "text",
-          text: `This would modify a LIVE container.\n${describeTarget(
-            target,
-          )}\n  Action:    ${description}\nNothing has been changed. Call ${tool} again with confirm: true to execute, after checking that the account and container above are the intended ones.`,
-        },
-      ],
-    },
-  };
+  if (!confirm) {
+    return {
+      allowed: false,
+      response: {
+        content: [
+          {
+            type: "text",
+            text: challenge
+              ? `This is a DESTRUCTIVE action. It cannot be undone by rolling back a container version.\n${describeTarget(
+                  target,
+                )}\n  Action:    ${description}\nNothing has been changed. To execute, call ${tool} again with BOTH:\n  confirm: true\n  confirmTarget: "${challenge}"`
+              : `This would modify a LIVE container.\n${describeTarget(
+                  target,
+                )}\n  Action:    ${description}\nNothing has been changed. Call ${tool} again with confirm: true to execute, after checking that the account and container above are the intended ones.`,
+          },
+        ],
+      },
+    };
+  }
+
+  if (challenge) {
+    // Compare on the exact string, trimmed. Case-insensitive would let
+    // "delete gtm-..." through, which is fine, but the identifier half is what
+    // carries the proof and GTM public ids are upper case anyway.
+    if (confirmTarget?.trim() !== challenge) {
+      return refuse(
+        `Refused: the confirmTarget did not match, so nothing was changed.\n${describeTarget(
+          target,
+        )}\n  Action:    ${description}\n  Expected:  "${challenge}"\n  Received:  ${
+          confirmTarget === undefined ? "nothing" : `"${confirmTarget}"`
+        }\nSend confirmTarget exactly as printed above. If it does not match the account and container you intended, stop and check where the id came from.`,
+      );
+    }
+    return { allowed: true };
+  }
+
+  // Ordinary write, on a live target, already confirmed.
+  return { allowed: true };
 }

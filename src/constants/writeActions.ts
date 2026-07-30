@@ -9,12 +9,11 @@
  * carries the checklist for adding a tool.
  */
 export const WRITE_ACTIONS: Record<string, readonly string[]> = {
-  // gtm_account has no write actions left: update was removed with the
-  // manage.accounts scope.
+  gtm_account: ["update"],
   gtm_built_in_variable: ["create", "remove", "revert"],
   gtm_client: ["create", "update", "remove", "revert"],
-  // "remove" is absent: container deletion went with the delete.containers scope.
-  gtm_container: ["create", "update", "combine", "moveTagId"],
+  gtm_container: ["create", "update", "remove", "combine", "moveTagId"],
+  gtm_user_permission: ["create", "update", "remove"],
   gtm_destination: ["link", "unlink"],
   gtm_environment: ["create", "update", "remove", "reauthorize"],
   gtm_folder: ["create", "update", "remove", "revert", "moveEntitiesToFolder"],
@@ -35,4 +34,29 @@ export const WRITE_ACTIONS: Record<string, readonly string[]> = {
     "resolveConflict",
   ],
   gtm_zone: ["create", "update", "remove", "revert"],
+};
+
+/**
+ * The subset of writes that no version rollback undoes, and the verb each one
+ * uses in its confirmation challenge.
+ *
+ * Deleting a tag is not here on purpose: it lives in a workspace, the previous
+ * container version still holds it, and it is recoverable. Deleting a whole
+ * container, handing someone access to a client's data, and renaming an
+ * account are not recoverable in that sense.
+ *
+ * Every action listed here must also appear in WRITE_ACTIONS above.
+ * docs/GUARDRAILS.md in Expliciet-BV/mcp-google-om explains the flow.
+ */
+export const DESTRUCTIVE_ACTIONS: Record<
+  string,
+  Readonly<Record<string, string>>
+> = {
+  gtm_container: { remove: "DELETE" },
+  gtm_user_permission: {
+    create: "GRANT",
+    update: "CHANGE",
+    remove: "REVOKE",
+  },
+  gtm_account: { update: "RENAME" },
 };

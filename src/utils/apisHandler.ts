@@ -71,16 +71,25 @@ async function redirectToGoogle(
 ) {
   console.log(`/redirectToGoogle oauthReqInfo`, oauthReqInfo);
 
-  // Four Tag Manager scopes, not the seven upstream requests. Dropped:
-  //   manage.accounts    only renames accounts and changes account settings,
-  //                      which no marketer workflow needs.
-  //   delete.containers  deletes whole containers.
-  //   manage.users       grants and revokes other people's access to client
-  //                      containers, the most damaging call in the API.
-  // The tools that needed those scopes are gone too, because a tool that can
-  // only fail on a permission error is worse than no tool: the agent retries,
-  // and the error blames Google rather than naming our decision.
-  // See docs/GUARDRAILS.md in Expliciet-BV/mcp-google-om.
+  // All seven Tag Manager scopes.
+  //
+  // These were briefly narrowed to four on 2026-07-29, dropping
+  // manage.accounts, delete.containers and manage.users. Christophe asked for
+  // the capabilities back on the same day: the agency does need to delete
+  // containers and manage container users, and a tool that cannot do it is
+  // not safer, it just moves the work back into the browser where nothing
+  // logs it and nothing checks the target.
+  //
+  // So the protection lives in the guard rather than in the scope list.
+  // Deleting a container, changing user permissions and renaming an account
+  // are classified as destructive in src/constants/writeActions.ts and need
+  // two independent confirmations, one of which cannot be produced without
+  // having resolved the real target. See docs/GUARDRAILS.md in
+  // Expliciet-BV/mcp-google-om.
+  //
+  // Note that accounts.create and accounts.delete do not exist in the Tag
+  // Manager API at all, so manage.accounts only buys renaming an account and
+  // changing its settings.
   const scopes = [
     "email",
     "profile",
@@ -88,6 +97,9 @@ async function redirectToGoogle(
     "https://www.googleapis.com/auth/tagmanager.edit.containers",
     "https://www.googleapis.com/auth/tagmanager.edit.containerversions",
     "https://www.googleapis.com/auth/tagmanager.publish",
+    "https://www.googleapis.com/auth/tagmanager.delete.containers",
+    "https://www.googleapis.com/auth/tagmanager.manage.users",
+    "https://www.googleapis.com/auth/tagmanager.manage.accounts",
   ];
   return new Response(null, {
     status: 302,
